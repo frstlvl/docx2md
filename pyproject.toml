@@ -29,10 +29,10 @@ dependencies = [
     "rich>=14.1.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 test = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
 ]
 
 [project.scripts]
@@ -71,10 +71,4 @@ exclude_lines = [
     "def __repr__",
     "raise AssertionError",
     "raise NotImplementedError",
-]
-
-[dependency-groups]
-test = [
-    "pytest>=8.4.1",
-    "pytest-cov>=6.2.1",
 ]
