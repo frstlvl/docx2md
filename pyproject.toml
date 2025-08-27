@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "docx2md"
+version = "0.1.0"
+description = "Convert DOCX files to Obsidian-friendly Markdown with YAML front matter"
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [
+    {name = "frstlvl"}
+]
+keywords = ["docx", "markdown", "obsidian", "pandoc", "conversion"]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing :: Markup",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "click>=8.2.1",
+    "mammoth>=1.10.0",
+    "markdownify>=1.2.0",
+    "rich>=14.1.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.scripts]
+docx2md = "docx2md:main"
+
+[project.urls]
+Homepage = "https://github.com/frstlvl/docx2md"
+Repository = "https://github.com/frstlvl/docx2md"
+Issues = "https://github.com/frstlvl/docx2md/issues"
+
+[tool.setuptools]
+py-modules = ["docx2md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--verbose",
+    "--tb=short",
+    "--strict-markers",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[tool.coverage.run]
+source = ["docx2md"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+
+[dependency-groups]
+test = [
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+]
