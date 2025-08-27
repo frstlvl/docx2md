@@ -33,6 +33,8 @@ venv.bak/
 .vscode/settings.json
 .vscode/launch.json
 .idea/
+.copilot/
+claude.md
 
 # OS
 .DS_Store
