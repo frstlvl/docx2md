@@ -58,6 +58,7 @@ class DocxConverter:
         pandoc_path: Optional[Path] = None,
         strict_pure_python: bool = False,
         enable_front_matter: bool = True,
+        front_matter_fields: Optional[List[str]] = None,
     ):
         self.output_dir = output_dir
         self.preserve_structure = preserve_structure
@@ -66,6 +67,12 @@ class DocxConverter:
         self.pandoc_path = pandoc_path
         self.strict_pure_python = strict_pure_python
         self.enable_front_matter = enable_front_matter
+
+        # Default front matter fields if none specified
+        if front_matter_fields is None:
+            self.front_matter_fields = ["title", "source_file"]
+        else:
+            self.front_matter_fields = front_matter_fields
 
         # Track conversion statistics
         self.stats = {"success": 0, "skipped": 0, "failed": 0}
@@ -187,18 +194,16 @@ class DocxConverter:
         )
 
     def create_yaml_front_matter(self, properties: Dict[str, Any]) -> str:
-        """Create YAML front matter from properties."""
+        """Create YAML front matter from properties using configured fields."""
         if not properties:
             return ""
 
-        # Only include title and source_file in front matter
+        # Filter properties based on configured fields
         filtered_properties = {}
 
-        if "title" in properties and properties["title"]:
-            filtered_properties["title"] = properties["title"]
-
-        if "source_file" in properties and properties["source_file"]:
-            filtered_properties["source_file"] = properties["source_file"]
+        for field in self.front_matter_fields:
+            if field in properties and properties[field]:
+                filtered_properties[field] = properties[field]
 
         if not filtered_properties:
             return ""
@@ -811,6 +816,11 @@ class DocxConverter:
 @click.option(
     "--no-front-matter", is_flag=True, help="Disable YAML front matter generation"
 )
+@click.option(
+    "--front-matter-fields",
+    default="title,source_file",
+    help="Comma-separated list of front matter fields to include (default: title,source_file). Available: title,author,created,modified,source_file",
+)
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
 def main(
     inputs: Tuple[Path, ...],
@@ -822,6 +832,7 @@ def main(
     pandoc_path: Optional[Path],
     strict_pure_python: bool,
     no_front_matter: bool,
+    front_matter_fields: str,
     verbose: bool,
 ):
     """Convert DOCX files to Obsidian-friendly Markdown.
@@ -841,11 +852,22 @@ def main(
 
         # Force pure Python conversion (skip Pandoc)
         docx2md document.docx --strict-pure-python
+
+        # Customize front matter fields
+        docx2md document.docx --front-matter-fields "title,author,created"
+
+        # Include all available fields
+        docx2md document.docx --front-matter-fields "title,author,created,modified,source_file"
     """
 
     # Set logging level
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    # Parse front matter fields
+    fields_list = [
+        field.strip() for field in front_matter_fields.split(",") if field.strip()
+    ]
 
     # Create converter
     converter = DocxConverter(
@@ -856,6 +878,7 @@ def main(
         pandoc_path=pandoc_path,
         strict_pure_python=strict_pure_python,
         enable_front_matter=not no_front_matter,
+        front_matter_fields=fields_list,
     )
 
     # Convert files
