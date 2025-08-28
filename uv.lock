@@ -109,12 +109,6 @@ dependencies = [
     { name = "rich" },
 ]
 
-[package.optional-dependencies]
-test = [
-    { name = "pytest" },
-    { name = "pytest-cov" },
-]
-
 [package.dev-dependencies]
 test = [
     { name = "pytest" },
@@ -126,11 +120,8 @@ requires-dist = [
     { name = "click", specifier = ">=8.2.1" },
     { name = "mammoth", specifier = ">=1.10.0" },
     { name = "markdownify", specifier = ">=1.2.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
-    { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4.0.0" },
     { name = "rich", specifier = ">=14.1.0" },
 ]
-provides-extras = ["test"]
 
 [package.metadata.requires-dev]
 test = [

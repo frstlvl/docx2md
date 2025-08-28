@@ -45,6 +45,7 @@ Thumbs.db
 .coverage
 htmlcov/
 .tox/
+/Test/
 
 # Output files
 media/
