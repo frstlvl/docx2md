@@ -1,7 +1,5 @@
 # docx2md
 
-## RSS Test
-
 [![Tests](https://github.com/frstlvl/docx2md/workflows/Tests/badge.svg)](https://github.com/frstlvl/docx2md/actions)
 
 Convert Microsoft Word `.docx` files to Obsidian-friendly Markdown with YAML front matter extracted from document properties.
