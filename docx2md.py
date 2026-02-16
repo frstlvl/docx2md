@@ -75,7 +75,7 @@ class DocxConverter:
             self.front_matter_fields = front_matter_fields
 
         # Track conversion statistics
-        self.stats = {"success": 0, "skipped": 0, "failed": 0}
+        self.stats = {"success": 0, "skipped": 0, "failed": 0, "failed_files": []}
 
     def sanitize_filename(self, name: str) -> str:
         """Sanitize filename: spaces to underscores, preserve case."""
@@ -141,6 +141,11 @@ class DocxConverter:
                 except KeyError:
                     logger.debug(f"No core properties found in {docx_path}")
 
+        except PermissionError:
+            logger.warning(
+                f"Cannot read properties from {docx_path}: "
+                "file appears to be open in another application"
+            )
         except (zipfile.BadZipFile, ET.ParseError) as e:
             logger.warning(f"Could not extract properties from {docx_path}: {e}")
 
@@ -256,6 +261,12 @@ class DocxConverter:
         except subprocess.CalledProcessError as e:
             logger.error(f"Pandoc failed for {docx_path}: {e.stderr}")
             return False
+        except PermissionError:
+            logger.error(
+                f"Pandoc cannot access {docx_path}: "
+                "file appears to be open in another application"
+            )
+            return False
         except Exception as e:
             logger.error(f"Error running Pandoc for {docx_path}: {e}")
             return False
@@ -288,6 +299,12 @@ class DocxConverter:
 
             return True
 
+        except PermissionError:
+            logger.error(
+                f"Cannot read {docx_path}: "
+                "file appears to be open in another application"
+            )
+            return False
         except Exception as e:
             logger.error(f"Mammoth conversion failed for {docx_path}: {e}")
             return False
@@ -548,6 +565,19 @@ class DocxConverter:
     ) -> bool:
         """Convert a single DOCX file to Markdown."""
         try:
+            # Check if file is accessible (detect files locked by Word or other apps)
+            try:
+                with open(docx_path, "rb") as f:
+                    pass
+            except PermissionError:
+                error_msg = "File appears to be open in another application (e.g., Word)"
+                logger.warning(f"{docx_path.name}: {error_msg}")
+                self.stats["failed"] += 1
+                self.stats["failed_files"].append(
+                    {"file": str(docx_path.name), "error": error_msg}
+                )
+                return False
+
             # Determine output path
             if self.output_dir:
                 if self.preserve_structure and input_root:
@@ -619,6 +649,10 @@ class DocxConverter:
 
         except Exception as e:
             self.stats["failed"] += 1
+            self.stats["failed_files"].append(
+                {"file": str(docx_path.name), "error": str(e)}
+            )
+            logger.debug(f"Error converting {docx_path}: {e}")
             return False
 
     def is_temporary_file(self, file_path: Path) -> bool:
@@ -779,6 +813,13 @@ class DocxConverter:
 
         console.print()
         console.print(table)
+
+        # List individual failed files
+        if self.stats["failed_files"]:
+            console.print("[bold red]Failed files:[/bold red]")
+            for item in self.stats["failed_files"]:
+                console.print(f"  [red]\u2717[/red] {item['file']} \u2014 {item['error']}")
+
         console.print()
 
 
