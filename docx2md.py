@@ -59,6 +59,7 @@ class DocxConverter:
         strict_pure_python: bool = False,
         enable_front_matter: bool = True,
         front_matter_fields: Optional[List[str]] = None,
+        normalize_typography: bool = True,
     ):
         self.output_dir = output_dir
         self.preserve_structure = preserve_structure
@@ -67,6 +68,7 @@ class DocxConverter:
         self.pandoc_path = pandoc_path
         self.strict_pure_python = strict_pure_python
         self.enable_front_matter = enable_front_matter
+        self.normalize_typography = normalize_typography
 
         # Default front matter fields if none specified
         if front_matter_fields is None:
@@ -75,7 +77,7 @@ class DocxConverter:
             self.front_matter_fields = front_matter_fields
 
         # Track conversion statistics
-        self.stats = {"success": 0, "skipped": 0, "failed": 0}
+        self.stats = {"success": 0, "skipped": 0, "failed": 0, "failed_files": []}
 
     def sanitize_filename(self, name: str) -> str:
         """Sanitize filename: spaces to underscores, preserve case."""
@@ -357,6 +359,10 @@ class DocxConverter:
             # Fix sequential numbering
             cleaned_content = self._fix_sequential_numbering(cleaned_content)
 
+            # Normalize smart typographic characters to ASCII
+            if self.normalize_typography:
+                cleaned_content = self._normalize_typography(cleaned_content)
+
             # Write back the cleaned content
             with open(md_path, "w", encoding="utf-8") as f:
                 f.write(cleaned_content)
@@ -543,6 +549,31 @@ class DocxConverter:
 
         return "\n".join(lines)
 
+    def _normalize_typography(self, content: str) -> str:
+        """Replace smart typographic characters with ASCII equivalents.
+
+        Replaces curly quotes, em/en dashes, ellipsis, guillemets, primes,
+        and modifier apostrophes with their plain ASCII counterparts.
+        """
+        # Multi-char replacements first (em dash -> double hyphen)
+        content = content.replace("\u2014", "--")  # em dash -> --
+        content = content.replace("\u2026", "...")  # ellipsis -> ...
+        content = content.replace("\u2033", '"')  # double prime -> "
+
+        # Single-char replacements via str.translate()
+        char_map = str.maketrans({
+            "\u201c": '"',   # left double quotation mark
+            "\u201d": '"',   # right double quotation mark
+            "\u2018": "'",   # left single quotation mark
+            "\u2019": "'",   # right single quotation mark
+            "\u2013": "-",   # en dash
+            "\u00ab": '"',   # left-pointing double angle quotation mark
+            "\u00bb": '"',   # right-pointing double angle quotation mark
+            "\u2032": "'",   # prime
+            "\u02bc": "'",   # modifier letter apostrophe
+        })
+        return content.translate(char_map)
+
     def convert_single_file(
         self, docx_path: Path, input_root: Optional[Path] = None
     ) -> bool:
@@ -615,10 +646,17 @@ class DocxConverter:
                 self.cleanup_empty_media_dirs(media_base, doc_stem)
 
                 self.stats["failed"] += 1
+                self.stats["failed_files"].append(
+                    {"file": str(docx_path.name), "error": "Both Pandoc and Mammoth conversion failed"}
+                )
                 return False
 
         except Exception as e:
             self.stats["failed"] += 1
+            self.stats["failed_files"].append(
+                {"file": str(docx_path.name), "error": str(e)}
+            )
+            logger.debug(f"Error converting {docx_path}: {e}")
             return False
 
     def is_temporary_file(self, file_path: Path) -> bool:
@@ -779,6 +817,13 @@ class DocxConverter:
 
         console.print()
         console.print(table)
+
+        # List individual failed files
+        if self.stats["failed_files"]:
+            console.print("[bold red]Failed files:[/bold red]")
+            for item in self.stats["failed_files"]:
+                console.print(f"  [red]✗[/red] {item['file']} — {item['error']}")
+
         console.print()
 
 
@@ -822,6 +867,11 @@ class DocxConverter:
     help="Comma-separated list of front matter fields to include (default: title,source_file). Available: title,author,created,modified,source_file",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
+@click.option(
+    "--keep-smart-chars",
+    is_flag=True,
+    help="Preserve smart typographic characters (curly quotes, em dashes, etc.) instead of replacing with ASCII equivalents",
+)
 def main(
     inputs: Tuple[Path, ...],
     output_dir: Optional[Path],
@@ -834,6 +884,7 @@ def main(
     no_front_matter: bool,
     front_matter_fields: str,
     verbose: bool,
+    keep_smart_chars: bool,
 ):
     """Convert DOCX files to Obsidian-friendly Markdown.
 
@@ -879,6 +930,7 @@ def main(
         strict_pure_python=strict_pure_python,
         enable_front_matter=not no_front_matter,
         front_matter_fields=fields_list,
+        normalize_typography=not keep_smart_chars,
     )
 
     # Convert files

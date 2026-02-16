@@ -12,6 +12,43 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
+## Beads Structure & Conventions
+
+Beads MUST follow an **epic / task / subtask** hierarchy:
+
+- **Epic**: High-level feature or initiative (e.g., "Output format improvements")
+- **Task**: A concrete, shippable unit of work within an epic (e.g., "Add --format flag for obsidian/gfm/standard")
+- **Subtask**: A granular implementation step within a task (e.g., "Add Pandoc target mapping for format flag")
+
+### Rules
+
+1. **All tasks and subtasks MUST have a parent set** — orphan tasks are not allowed
+2. **All beads (epics, tasks, subtasks) MUST have full descriptions** — title alone is insufficient
+3. **Descriptions must be self-contained** — another AI agent in a fresh session with NO other context must be able to understand and complete the work from the bead description alone
+4. **Include in every description**:
+   - **What**: What needs to be done
+   - **Why**: The motivation or user need
+   - **Where**: Which files/methods/lines are affected
+   - **How**: Implementation approach and key decisions
+   - **Acceptance criteria**: How to verify the work is complete
+
+### Example
+
+```bash
+# Create epic
+bd create "Output format improvements" --type epic --label enhancement
+
+# Create task under epic
+bd create "Replace smart typographic characters with ASCII equivalents" \
+  --type task --parent docx2md-1 --label enhancement \
+  --description "Add a post-processing step _normalize_typography() in docx2md.py that replaces Unicode smart characters (curly quotes ""'', en/em dashes –—, ellipsis …, guillemets «», primes ′″) with ASCII equivalents. Always-on by default with --keep-smart-chars opt-out flag. Insert after _fix_sequential_numbering() in apply_markdown_linting_rules(). Add tests in tests/test_typography_normalization.py."
+
+# Create subtask under task
+bd create "Implement _normalize_typography method" \
+  --type subtask --parent docx2md-2 \
+  --description "Create _normalize_typography(self, content: str) -> str in DocxConverter class after _fix_sequential_numbering (~line 545). Use str.replace() for multi-char mappings (— -> --) then str.translate() for single-char ones. Full mapping table: \" \" -> \", ' ' -> ', – -> -, — -> --, … -> ..., « » -> \", ′ -> ', ″ -> \". Gate call in apply_markdown_linting_rules with self.normalize_typography."
+```
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
@@ -41,7 +78,7 @@ bd sync               # Sync with git
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 
-## Project Context (Migrated from `claude.md`)
+## Project Context
 
 ### Overview
 
