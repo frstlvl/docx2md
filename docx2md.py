@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-docx2md: Convert DOCX files to Obsidian-friendly Markdown with YAML front matter.
+docx2md: Convert DOCX files to Markdown with YAML front matter.
 
 This tool converts Microsoft Word .docx files to Markdown format, extracting
 embedded media and optionally adding YAML front matter from document properties.
+Supports Obsidian-flavored, GitHub Flavored (GFM), and standard CommonMark output.
 Prefers Pandoc for conversion but falls back to Mammoth+Markdownify if unavailable.
 """
 
@@ -49,6 +50,20 @@ logger = logging.getLogger(__name__)
 class DocxConverter:
     """Main converter class handling DOCX to Markdown conversion."""
 
+    # Mapping from output format to human-readable name
+    FORMAT_NAMES = {
+        "obsidian": "Obsidian-flavored",
+        "gfm": "GitHub Flavored (GFM)",
+        "standard": "standard (CommonMark)",
+    }
+
+    # Mapping from output format to Pandoc target format
+    PANDOC_TARGETS = {
+        "obsidian": "gfm",
+        "gfm": "gfm",
+        "standard": "commonmark",
+    }
+
     def __init__(
         self,
         output_dir: Optional[Path] = None,
@@ -59,6 +74,7 @@ class DocxConverter:
         strict_pure_python: bool = False,
         enable_front_matter: bool = True,
         front_matter_fields: Optional[List[str]] = None,
+        output_format: str = "obsidian",
     ):
         self.output_dir = output_dir
         self.preserve_structure = preserve_structure
@@ -67,6 +83,7 @@ class DocxConverter:
         self.pandoc_path = pandoc_path
         self.strict_pure_python = strict_pure_python
         self.enable_front_matter = enable_front_matter
+        self.output_format = output_format
 
         # Default front matter fields if none specified
         if front_matter_fields is None:
@@ -241,7 +258,7 @@ class DocxConverter:
                 "-f",
                 "docx",
                 "-t",
-                "gfm",
+                self.PANDOC_TARGETS.get(self.output_format, "gfm"),
                 "--wrap=auto",
                 f"--extract-media={media_dir}",
                 "-o",
@@ -700,11 +717,12 @@ class DocxConverter:
         """Convert multiple DOCX files. Returns exit code."""
 
         # Print header
+        format_name = self.FORMAT_NAMES.get(self.output_format, "Markdown")
         console.print()
         console.print(
             Panel.fit(
                 "[bold cyan]DOCX to Markdown Converter[/bold cyan]\n"
-                "Converting Word documents to Obsidian-friendly Markdown",
+                f"Converting Word documents to {format_name} Markdown",
                 border_style="cyan",
             )
         )
@@ -822,6 +840,14 @@ class DocxConverter:
     help="Comma-separated list of front matter fields to include (default: title,source_file). Available: title,author,created,modified,source_file",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
+@click.option(
+    "--format",
+    "-f",
+    "output_format",
+    type=click.Choice(["obsidian", "gfm", "standard"], case_sensitive=False),
+    default="obsidian",
+    help="Output Markdown dialect (default: obsidian). obsidian: Obsidian-flavored, gfm: GitHub Flavored, standard: CommonMark",
+)
 def main(
     inputs: Tuple[Path, ...],
     output_dir: Optional[Path],
@@ -834,15 +860,22 @@ def main(
     no_front_matter: bool,
     front_matter_fields: str,
     verbose: bool,
+    output_format: str,
 ):
-    """Convert DOCX files to Obsidian-friendly Markdown.
+    """Convert DOCX files to Markdown.
 
     INPUTS can be a mix of .docx files and directories containing .docx files.
 
     Examples:
 
-        # Convert single file to same directory
+        # Convert single file (default: Obsidian-flavored Markdown)
         docx2md document.docx
+
+        # Convert to GitHub Flavored Markdown
+        docx2md document.docx --format gfm
+
+        # Convert to standard CommonMark
+        docx2md document.docx --format standard
 
         # Convert file to specific output directory
         docx2md document.docx -o output/
@@ -879,6 +912,7 @@ def main(
         strict_pure_python=strict_pure_python,
         enable_front_matter=not no_front_matter,
         front_matter_fields=fields_list,
+        output_format=output_format,
     )
 
     # Convert files
