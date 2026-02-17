@@ -411,7 +411,8 @@ class DocxConverter:
         i = 0
 
         while i < len(lines):
-            line = lines[i]
+            # MD009: Remove trailing whitespace from each line
+            line = lines[i].rstrip()
 
             # MD022: Surround headings with blank lines
             if line.strip().startswith("#"):
@@ -447,7 +448,7 @@ class DocxConverter:
                 while i < len(lines) and (
                     self._is_list_item(lines[i]) or lines[i].strip() == ""
                 ):
-                    cleaned_lines.append(lines[i])
+                    cleaned_lines.append(lines[i].rstrip())
                     i += 1
                 i -= 1  # Adjust for the increment at end of loop
 
