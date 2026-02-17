@@ -124,3 +124,30 @@ Final text"""
                     assert (
                         lines[i + 1].strip() == ""
                     ), f"Header '{line}' should have blank line after"
+
+    def test_md009_trailing_whitespace_removed(self):
+        """Test MD009: Trailing spaces should be stripped from all lines."""
+        converter = DocxConverter()
+
+        content = "# Heading  \n\nSome text with trailing spaces   \nAnother line  \nClean line\n"
+        result = converter._clean_markdown_content(content)
+        for line in result.split("\n"):
+            assert line == line.rstrip(), f"Trailing whitespace found: {line!r}"
+
+    def test_md009_trailing_whitespace_in_list_items(self):
+        """Test MD009: Trailing spaces in list items should be stripped."""
+        converter = DocxConverter()
+
+        content = "# List\n\n- Item one  \n- Item two   \n- Item three\n"
+        result = converter._clean_markdown_content(content)
+        for line in result.split("\n"):
+            assert line == line.rstrip(), f"Trailing whitespace found in list: {line!r}"
+
+    def test_md009_preserves_content(self):
+        """Test MD009: Stripping trailing whitespace should not alter content."""
+        converter = DocxConverter()
+
+        content = "Some text  \nwith trailing spaces   \n"
+        result = converter._clean_markdown_content(content)
+        assert "Some text" in result
+        assert "with trailing spaces" in result
