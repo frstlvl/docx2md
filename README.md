@@ -78,6 +78,14 @@ docx2md document.docx --front-matter-fields "title,author,created"
 # Include all available fields
 
 docx2md document.docx --front-matter-fields "title,author,created,modified,source_file"
+
+# Select output markdown dialect
+
+docx2md document.docx --format gfm
+
+# Keep smart typographic characters instead of ASCII normalization
+
+docx2md document.docx --keep-smart-chars
 ```
 
 ### Command Line Options
@@ -99,6 +107,10 @@ Options:
   --front-matter-fields TEXT      Comma-separated list of front matter fields to include
                                   (default: title,source_file)
                                   Available: title,author,created,modified,source_file
+  --keep-smart-chars              Preserve smart typographic characters (curly quotes,
+                                  em dashes, etc.) instead of replacing with ASCII equivalents
+  -f, --format [obsidian|gfm|standard]
+                                  Output Markdown dialect (default: obsidian)
   -v, --verbose                   Enable verbose logging
   --help                          Show this message and exit.
 ```

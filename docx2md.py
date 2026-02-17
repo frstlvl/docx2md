@@ -392,12 +392,31 @@ class DocxConverter:
             if self.normalize_typography:
                 cleaned_content = self._normalize_typography(cleaned_content)
 
+            # Apply output-format-specific post-processing hooks
+            cleaned_content = self._apply_format_specific_postprocessing(cleaned_content)
+
             # Write back the cleaned content
             with open(md_path, "w", encoding="utf-8") as f:
                 f.write(cleaned_content)
 
         except Exception as e:
             logger.debug(f"Could not apply markdown linting rules to {md_path}: {e}")
+
+    def _apply_format_specific_postprocessing(self, content: str) -> str:
+        """Apply format-specific post-processing hooks."""
+        if self.output_format == "obsidian":
+            return self._apply_obsidian_format_postprocessing(content)
+
+        return content
+
+    def _apply_obsidian_format_postprocessing(self, content: str) -> str:
+        """Apply Obsidian-specific post-processing.
+
+        MVP behavior: no syntax transforms are applied yet.
+        This method exists as a dedicated extension point for future
+        Obsidian-specific features (e.g., wikilinks/callouts/embeds).
+        """
+        return content
 
     def _clean_markdown_content(self, content: str) -> str:
         """Clean markdown content according to linting rules."""

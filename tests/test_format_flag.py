@@ -109,3 +109,38 @@ class TestFormatNames:
 
     def test_standard_format_name(self):
         assert DocxConverter.FORMAT_NAMES["standard"] == "standard (CommonMark)"
+
+
+class TestFormatSpecificPostProcessing:
+    """Test format-specific post-processing hook behavior."""
+
+    def test_obsidian_calls_obsidian_hook(self, tmp_path):
+        converter = DocxConverter(output_format="obsidian")
+        md_path = tmp_path / "test.md"
+        md_path.write_text("Some content\n", encoding="utf-8")
+
+        with patch.object(
+            converter,
+            "_apply_obsidian_format_postprocessing",
+            return_value="Hooked output\n",
+        ) as mock_hook:
+            converter.apply_markdown_linting_rules(md_path)
+            mock_hook.assert_called_once()
+
+        assert md_path.read_text(encoding="utf-8") == "Hooked output\n"
+
+    @pytest.mark.parametrize("output_format", ["gfm", "standard"])
+    def test_non_obsidian_skips_obsidian_hook(self, tmp_path, output_format):
+        converter = DocxConverter(output_format=output_format)
+        md_path = tmp_path / f"test-{output_format}.md"
+        md_path.write_text("Some content\n", encoding="utf-8")
+
+        with patch.object(
+            converter,
+            "_apply_obsidian_format_postprocessing",
+            return_value="Should not be used\n",
+        ) as mock_hook:
+            converter.apply_markdown_linting_rules(md_path)
+            mock_hook.assert_not_called()
+
+        assert md_path.read_text(encoding="utf-8") == "Some content\n"
