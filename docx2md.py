@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-docx2md: Convert DOCX files to Obsidian-friendly Markdown with YAML front matter.
+docx2md: Convert DOCX files to Markdown with YAML front matter.
 
 This tool converts Microsoft Word .docx files to Markdown format, extracting
 embedded media and optionally adding YAML front matter from document properties.
+Supports Obsidian-flavored, GitHub Flavored (GFM), and standard CommonMark output.
 Prefers Pandoc for conversion but falls back to Mammoth+Markdownify if unavailable.
 """
 
@@ -24,13 +25,8 @@ from markdownify import markdownify
 from rich import print as rprint
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-)
+from rich.progress import (BarColumn, Progress, SpinnerColumn,
+                           TaskProgressColumn, TextColumn)
 from rich.table import Table
 from rich.text import Text
 
@@ -49,6 +45,20 @@ logger = logging.getLogger(__name__)
 class DocxConverter:
     """Main converter class handling DOCX to Markdown conversion."""
 
+    # Mapping from output format to human-readable name
+    FORMAT_NAMES = {
+        "obsidian": "Obsidian-flavored",
+        "gfm": "GitHub Flavored (GFM)",
+        "standard": "standard (CommonMark)",
+    }
+
+    # Mapping from output format to Pandoc target format
+    PANDOC_TARGETS = {
+        "obsidian": "gfm",
+        "gfm": "gfm",
+        "standard": "commonmark",
+    }
+
     def __init__(
         self,
         output_dir: Optional[Path] = None,
@@ -59,6 +69,8 @@ class DocxConverter:
         strict_pure_python: bool = False,
         enable_front_matter: bool = True,
         front_matter_fields: Optional[List[str]] = None,
+        normalize_typography: bool = True,
+        output_format: str = "obsidian",
     ):
         self.output_dir = output_dir
         self.preserve_structure = preserve_structure
@@ -67,6 +79,8 @@ class DocxConverter:
         self.pandoc_path = pandoc_path
         self.strict_pure_python = strict_pure_python
         self.enable_front_matter = enable_front_matter
+        self.normalize_typography = normalize_typography
+        self.output_format = output_format
 
         # Default front matter fields if none specified
         if front_matter_fields is None:
@@ -75,7 +89,7 @@ class DocxConverter:
             self.front_matter_fields = front_matter_fields
 
         # Track conversion statistics
-        self.stats = {"success": 0, "skipped": 0, "failed": 0}
+        self.stats = {"success": 0, "skipped": 0, "failed": 0, "failed_files": []}
 
     def sanitize_filename(self, name: str) -> str:
         """Sanitize filename: spaces to underscores, preserve case."""
@@ -141,6 +155,11 @@ class DocxConverter:
                 except KeyError:
                     logger.debug(f"No core properties found in {docx_path}")
 
+        except PermissionError:
+            logger.warning(
+                f"Cannot read properties from {docx_path}: "
+                "file appears to be open in another application"
+            )
         except (zipfile.BadZipFile, ET.ParseError) as e:
             logger.warning(f"Could not extract properties from {docx_path}: {e}")
 
@@ -241,7 +260,7 @@ class DocxConverter:
                 "-f",
                 "docx",
                 "-t",
-                "gfm",
+                self.PANDOC_TARGETS.get(self.output_format, "gfm"),
                 "--wrap=auto",
                 f"--extract-media={media_dir}",
                 "-o",
@@ -255,6 +274,12 @@ class DocxConverter:
 
         except subprocess.CalledProcessError as e:
             logger.error(f"Pandoc failed for {docx_path}: {e.stderr}")
+            return False
+        except PermissionError:
+            logger.error(
+                f"Pandoc cannot access {docx_path}: "
+                "file appears to be open in another application"
+            )
             return False
         except Exception as e:
             logger.error(f"Error running Pandoc for {docx_path}: {e}")
@@ -288,6 +313,12 @@ class DocxConverter:
 
             return True
 
+        except PermissionError:
+            logger.error(
+                f"Cannot read {docx_path}: "
+                "file appears to be open in another application"
+            )
+            return False
         except Exception as e:
             logger.error(f"Mammoth conversion failed for {docx_path}: {e}")
             return False
@@ -357,12 +388,35 @@ class DocxConverter:
             # Fix sequential numbering
             cleaned_content = self._fix_sequential_numbering(cleaned_content)
 
+            # Normalize smart typographic characters to ASCII
+            if self.normalize_typography:
+                cleaned_content = self._normalize_typography(cleaned_content)
+
+            # Apply output-format-specific post-processing hooks
+            cleaned_content = self._apply_format_specific_postprocessing(cleaned_content)
+
             # Write back the cleaned content
             with open(md_path, "w", encoding="utf-8") as f:
                 f.write(cleaned_content)
 
         except Exception as e:
             logger.debug(f"Could not apply markdown linting rules to {md_path}: {e}")
+
+    def _apply_format_specific_postprocessing(self, content: str) -> str:
+        """Apply format-specific post-processing hooks."""
+        if self.output_format == "obsidian":
+            return self._apply_obsidian_format_postprocessing(content)
+
+        return content
+
+    def _apply_obsidian_format_postprocessing(self, content: str) -> str:
+        """Apply Obsidian-specific post-processing.
+
+        MVP behavior: no syntax transforms are applied yet.
+        This method exists as a dedicated extension point for future
+        Obsidian-specific features (e.g., wikilinks/callouts/embeds).
+        """
+        return content
 
     def _clean_markdown_content(self, content: str) -> str:
         """Clean markdown content according to linting rules."""
@@ -371,7 +425,8 @@ class DocxConverter:
         i = 0
 
         while i < len(lines):
-            line = lines[i]
+            # MD009: Remove trailing whitespace from each line
+            line = lines[i].rstrip()
 
             # MD022: Surround headings with blank lines
             if line.strip().startswith("#"):
@@ -407,7 +462,7 @@ class DocxConverter:
                 while i < len(lines) and (
                     self._is_list_item(lines[i]) or lines[i].strip() == ""
                 ):
-                    cleaned_lines.append(lines[i])
+                    cleaned_lines.append(lines[i].rstrip())
                     i += 1
                 i -= 1  # Adjust for the increment at end of loop
 
@@ -543,11 +598,49 @@ class DocxConverter:
 
         return "\n".join(lines)
 
+    def _normalize_typography(self, content: str) -> str:
+        """Replace smart typographic characters with ASCII equivalents.
+
+        Replaces curly quotes, em/en dashes, ellipsis, guillemets, primes,
+        and modifier apostrophes with their plain ASCII counterparts.
+        """
+        # Multi-char replacements first (em dash -> double hyphen)
+        content = content.replace("\u2014", "--")  # em dash -> --
+        content = content.replace("\u2026", "...")  # ellipsis -> ...
+        content = content.replace("\u2033", '"')  # double prime -> "
+
+        # Single-char replacements via str.translate()
+        char_map = str.maketrans({
+            "\u201c": '"',   # left double quotation mark
+            "\u201d": '"',   # right double quotation mark
+            "\u2018": "'",   # left single quotation mark
+            "\u2019": "'",   # right single quotation mark
+            "\u2013": "-",   # en dash
+            "\u00ab": '"',   # left-pointing double angle quotation mark
+            "\u00bb": '"',   # right-pointing double angle quotation mark
+            "\u2032": "'",   # prime
+            "\u02bc": "'",   # modifier letter apostrophe
+        })
+        return content.translate(char_map)
+
     def convert_single_file(
         self, docx_path: Path, input_root: Optional[Path] = None
     ) -> bool:
         """Convert a single DOCX file to Markdown."""
         try:
+            # Check if file is accessible (detect files locked by Word or other apps)
+            try:
+                with open(docx_path, "rb") as f:
+                    pass
+            except PermissionError:
+                error_msg = "File appears to be open in another application (e.g., Word)"
+                logger.warning(f"{docx_path.name}: {error_msg}")
+                self.stats["failed"] += 1
+                self.stats["failed_files"].append(
+                    {"file": str(docx_path.name), "error": error_msg}
+                )
+                return False
+
             # Determine output path
             if self.output_dir:
                 if self.preserve_structure and input_root:
@@ -615,10 +708,17 @@ class DocxConverter:
                 self.cleanup_empty_media_dirs(media_base, doc_stem)
 
                 self.stats["failed"] += 1
+                self.stats["failed_files"].append(
+                    {"file": str(docx_path.name), "error": "Both Pandoc and Mammoth conversion failed"}
+                )
                 return False
 
         except Exception as e:
             self.stats["failed"] += 1
+            self.stats["failed_files"].append(
+                {"file": str(docx_path.name), "error": str(e)}
+            )
+            logger.debug(f"Error converting {docx_path}: {e}")
             return False
 
     def is_temporary_file(self, file_path: Path) -> bool:
@@ -700,11 +800,12 @@ class DocxConverter:
         """Convert multiple DOCX files. Returns exit code."""
 
         # Print header
+        format_name = self.FORMAT_NAMES.get(self.output_format, "Markdown")
         console.print()
         console.print(
             Panel.fit(
                 "[bold cyan]DOCX to Markdown Converter[/bold cyan]\n"
-                "Converting Word documents to Obsidian-friendly Markdown",
+                f"Converting Word documents to {format_name} Markdown",
                 border_style="cyan",
             )
         )
@@ -779,6 +880,13 @@ class DocxConverter:
 
         console.print()
         console.print(table)
+
+        # List individual failed files
+        if self.stats["failed_files"]:
+            console.print("[bold red]Failed files:[/bold red]")
+            for item in self.stats["failed_files"]:
+                console.print(f"  [red]✗[/red] {item['file']} — {item['error']}")
+
         console.print()
 
 
@@ -822,6 +930,19 @@ class DocxConverter:
     help="Comma-separated list of front matter fields to include (default: title,source_file). Available: title,author,created,modified,source_file",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
+@click.option(
+    "--keep-smart-chars",
+    is_flag=True,
+    help="Preserve smart typographic characters (curly quotes, em dashes, etc.) instead of replacing with ASCII equivalents",
+)
+@click.option(
+    "--format",
+    "-f",
+    "output_format",
+    type=click.Choice(["obsidian", "gfm", "standard"], case_sensitive=False),
+    default="obsidian",
+    help="Output Markdown dialect (default: obsidian). obsidian: Obsidian-flavored, gfm: GitHub Flavored, standard: CommonMark",
+)
 def main(
     inputs: Tuple[Path, ...],
     output_dir: Optional[Path],
@@ -834,15 +955,23 @@ def main(
     no_front_matter: bool,
     front_matter_fields: str,
     verbose: bool,
+    keep_smart_chars: bool,
+    output_format: str,
 ):
-    """Convert DOCX files to Obsidian-friendly Markdown.
+    """Convert DOCX files to Markdown.
 
     INPUTS can be a mix of .docx files and directories containing .docx files.
 
     Examples:
 
-        # Convert single file to same directory
+        # Convert single file (default: Obsidian-flavored Markdown)
         docx2md document.docx
+
+        # Convert to GitHub Flavored Markdown
+        docx2md document.docx --format gfm
+
+        # Convert to standard CommonMark
+        docx2md document.docx --format standard
 
         # Convert file to specific output directory
         docx2md document.docx -o output/
@@ -879,6 +1008,8 @@ def main(
         strict_pure_python=strict_pure_python,
         enable_front_matter=not no_front_matter,
         front_matter_fields=fields_list,
+        normalize_typography=not keep_smart_chars,
+        output_format=output_format,
     )
 
     # Convert files
