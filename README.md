@@ -130,6 +130,7 @@ docx2md can extract metadata from DOCX core properties and create customizable Y
 - `source_file`: Original DOCX filename
 
 **Default behavior** (includes title and source_file):
+
 ```yaml
 ---
 title: Document Title
@@ -138,6 +139,7 @@ source_file: original_document.docx
 ```
 
 **All fields example**:
+
 ```yaml
 ---
 title: Document Title
@@ -149,6 +151,7 @@ source_file: original_document.docx
 ```
 
 **Custom field selection**:
+
 ```bash
 
 # Only title and creation date

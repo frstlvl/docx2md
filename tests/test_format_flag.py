@@ -1,7 +1,9 @@
 """Tests for the --format flag (obsidian/gfm/standard markdown dialect)."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from docx2md import DocxConverter
 
 
@@ -142,5 +144,13 @@ class TestFormatSpecificPostProcessing:
         ) as mock_hook:
             converter.apply_markdown_linting_rules(md_path)
             mock_hook.assert_not_called()
+
+        assert md_path.read_text(encoding="utf-8") == "Some content\n"
+
+        assert md_path.read_text(encoding="utf-8") == "Some content\n"
+
+        assert md_path.read_text(encoding="utf-8") == "Some content\n"
+
+        assert md_path.read_text(encoding="utf-8") == "Some content\n"
 
         assert md_path.read_text(encoding="utf-8") == "Some content\n"
